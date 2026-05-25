@@ -1,8 +1,11 @@
 package com.pdftoolbox.app.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Bitmap.CompressFormat
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix as androidMatrix
 import android.net.Uri
 import com.pdftoolbox.app.data.models.PdfMetadata
 import com.tom_roush.pdfbox.multipdf.PDFMergerUtility
@@ -11,6 +14,7 @@ import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
+import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.pdmodel.encryption.AccessPermission
@@ -20,8 +24,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.io.OutputStream
-import android.graphics.Bitmap
-import android.graphics.Matrix as androidMatrix
 
 class PdfToolsRepository(private val context: Context) {
 
@@ -153,22 +155,23 @@ class PdfToolsRepository(private val context: Context) {
         try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 document = PDDocument.load(input)
-                
-                val imageStream = context.contentResolver.openInputStream(imageUri)
-                val bitmap = BitmapFactory.decodeStream(imageStream)
-                imageStream?.close()
-                
+
+                val bitmap = context.contentResolver.openInputStream(imageUri)?.use { imageStream ->
+                    BitmapFactory.decodeStream(imageStream)
+                }
+
                 if (bitmap != null) {
+                    val imgWidth = bitmap.width.toFloat()
+                    val imgHeight = bitmap.height.toFloat()
                     val imageXObject = LosslessFactory.createFromImage(document, bitmap)
-                    
+                    bitmap.recycle()
+
+                    val drawWidth = 200f
+                    val drawHeight = if (imgWidth > 0f) (imgHeight / imgWidth) * drawWidth else drawWidth
+
                     document!!.pages.forEach { page ->
                          val contentStream = PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)
-                         
-                         val width = 200f
-                         val height = (bitmap.height.toFloat() / bitmap.width.toFloat()) * width
-                         
-                         // Draw at bottom left with some padding
-                         contentStream.drawImage(imageXObject, 50f, 50f, width, height)
+                         contentStream.drawImage(imageXObject, 50f, 50f, drawWidth, drawHeight)
                          contentStream.close()
                     }
                 }
@@ -244,18 +247,19 @@ class PdfToolsRepository(private val context: Context) {
         val document = PDDocument()
         try {
             imageUris.forEach { uri ->
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                if (bitmap != null) {
-                    val page = PDPage(PDRectangle(bitmap.width.toFloat(), bitmap.height.toFloat()))
-                    document.addPage(page)
-                    
-                    val contentStream = PDPageContentStream(document, page)
-                    val image = LosslessFactory.createFromImage(document, bitmap)
-                    contentStream.drawImage(image, 0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
-                    contentStream.close()
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    if (bitmap != null) {
+                        val page = PDPage(PDRectangle(bitmap.width.toFloat(), bitmap.height.toFloat()))
+                        document.addPage(page)
+
+                        val contentStream = PDPageContentStream(document, page)
+                        val image = LosslessFactory.createFromImage(document, bitmap)
+                        contentStream.drawImage(image, 0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
+                        contentStream.close()
+                        bitmap.recycle()
+                    }
                 }
-                inputStream?.close()
             }
             context.contentResolver.openOutputStream(outputUri)?.use { output ->
                 document.save(output)
@@ -269,29 +273,45 @@ class PdfToolsRepository(private val context: Context) {
         }
     }
 
-    suspend fun compressPdf(uri: Uri, outputUri: Uri): Boolean = withContext(Dispatchers.IO) {
+    suspend fun compressPdf(uri: Uri, outputUri: Uri, quality: Int = 60): Boolean = withContext(Dispatchers.IO) {
         var document: PDDocument? = null
         try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 document = PDDocument.load(input)
-                
-                // For better compression, we downsample images
-                document!!.pages.forEach { page ->
+
+                val doc = document!!
+                for (pageIdx in 0 until doc.numberOfPages) {
+                    val page = doc.getPage(pageIdx)
                     val resources = page.resources
-                    resources.xObjectNames.forEach { name ->
-                        if (resources.isImageXObject(name)) {
+                    val imageNames = resources.xObjectNames.filter { resources.isImageXObject(it) }
+                    for (name in imageNames) {
+                        try {
                             val image = resources.getXObject(name) as? com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
-                            image?.let {
-                                // In a real app, we'd downsample here. 
-                                // PDFBox-Android doesn't make it trivial to "replace" an image in-place easily 
-                                // without rebuilding the resources dictionary.
+                            if (image != null) {
+                                val originalBitmap = image.image
+                                if (originalBitmap != null && originalBitmap.width > 0 && originalBitmap.height > 0) {
+                                    val maxDim = 1200
+                                    var newWidth = originalBitmap.width
+                                    var newHeight = originalBitmap.height
+                                    if (newWidth > maxDim || newHeight > maxDim) {
+                                        val scale = minOf(maxDim.toFloat() / newWidth, maxDim.toFloat() / newHeight)
+                                        newWidth = (newWidth * scale).toInt().coerceAtLeast(1)
+                                        newHeight = (newHeight * scale).toInt().coerceAtLeast(1)
+                                    }
+                                    val scaledBitmap = Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true)
+                                    val compressedImage = JPEGFactory.createFromImage(doc, scaledBitmap, quality / 100f)
+                                    resources.put(name, compressedImage)
+                                    scaledBitmap.recycle()
+                                    originalBitmap.recycle()
+                                }
                             }
+                        } catch (_: Exception) {
                         }
                     }
                 }
-                
+
                 context.contentResolver.openOutputStream(outputUri)?.use { output ->
-                    document!!.save(output)
+                    doc.save(output)
                 }
             }
             return@withContext true
@@ -480,7 +500,7 @@ class PdfToolsRepository(private val context: Context) {
                             if (resources.isImageXObject(name)) {
                                 val image = resources.getXObject(name) as com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
                                 val bitmap = image.image
-                                
+
                                 val fileName = "image_${pageIndex + 1}_$name.png"
                                 val file = outputDir.createFile("image/png", fileName)
                                 file?.let {
@@ -489,6 +509,7 @@ class PdfToolsRepository(private val context: Context) {
                                         count++
                                     }
                                 }
+                                bitmap.recycle()
                             }
                         }
                     }

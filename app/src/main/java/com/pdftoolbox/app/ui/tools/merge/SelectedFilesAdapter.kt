@@ -3,21 +3,17 @@ package com.pdftoolbox.app.ui.tools.merge
 import android.net.Uri
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.pdftoolbox.app.databinding.ItemFileSelectedBinding
 import java.util.Collections
 
 class SelectedFilesAdapter(
     private val onRemoveClick: (Uri) -> Unit
-) : RecyclerView.Adapter<SelectedFilesAdapter.FileViewHolder>() {
+) : ListAdapter<Uri, SelectedFilesAdapter.FileViewHolder>(DiffCallback()) {
 
     private val files = mutableListOf<Uri>()
-
-    fun submitList(newFiles: List<Uri>) {
-        files.clear()
-        files.addAll(newFiles)
-        notifyDataSetChanged()
-    }
 
     fun getItems(): List<Uri> {
         return files.toList()
@@ -36,16 +32,20 @@ class SelectedFilesAdapter(
         notifyItemMoved(fromPosition, toPosition)
     }
 
+    override fun submitList(list: List<Uri>?) {
+        super.submitList(list)
+        files.clear()
+        list?.let { files.addAll(it) }
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FileViewHolder {
         val binding = ItemFileSelectedBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return FileViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: FileViewHolder, position: Int) {
-        holder.bind(files[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = files.size
 
     inner class FileViewHolder(private val binding: ItemFileSelectedBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(uri: Uri) {
@@ -54,5 +54,10 @@ class SelectedFilesAdapter(
             binding.btnRemove.visibility = android.view.View.VISIBLE
             binding.btnRemove.setOnClickListener { onRemoveClick(uri) }
         }
+    }
+
+    class DiffCallback : DiffUtil.ItemCallback<Uri>() {
+        override fun areItemsTheSame(oldItem: Uri, newItem: Uri): Boolean = oldItem == newItem
+        override fun areContentsTheSame(oldItem: Uri, newItem: Uri): Boolean = oldItem == newItem
     }
 }

@@ -26,12 +26,22 @@ class EditPdfViewModel(application: Application) : AndroidViewModel(application)
     fun applyEdits(overlayBitmap: Bitmap, outputUri: Uri) {
         val uri = _selectedFile.value ?: return
         viewModelScope.launch {
-            val success = repository.addBitmapOverlayToPdf(uri, overlayBitmap, 0, outputUri)
-            if (success) {
-                _editState.value = Result.success(Unit)
-            } else {
-                _editState.value = Result.failure(Exception("Failed to save edited PDF"))
+            try {
+                val success = repository.addBitmapOverlayToPdf(uri, overlayBitmap, currentPageIndex, outputUri)
+                if (success) {
+                    _editState.value = Result.success(Unit)
+                } else {
+                    _editState.value = Result.failure(Exception("Failed to save edited PDF"))
+                }
+            } catch (e: Exception) {
+                _editState.value = Result.failure(e)
             }
         }
+    }
+
+    private var currentPageIndex: Int = 0
+
+    fun setCurrentPage(index: Int) {
+        currentPageIndex = index
     }
 }

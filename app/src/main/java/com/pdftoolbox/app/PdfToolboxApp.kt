@@ -5,14 +5,16 @@ import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class PdfToolboxApp : Application() {
     companion object {
-        lateinit var instance: PdfToolboxApp
-            private set
+        private var _instance: PdfToolboxApp? = null
+        val instance: PdfToolboxApp
+            get() = _instance ?: throw IllegalStateException(
+                "PdfToolboxApp not initialized. Application.onCreate() may not have been called."
+            )
     }
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
-        // Initialize PDFBox
+        _instance = this
         PDFBoxResourceLoader.init(applicationContext)
     }
 }

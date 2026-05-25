@@ -37,9 +37,12 @@ class ViewerFragment : Fragment() {
     private var parcelFileDescriptor: ParcelFileDescriptor? = null
     private var pageCount: Int = 0
     private lateinit var adapter: PdfPageAdapter
-    private val bitmapCache = object : LruCache<Int, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()) {
+    private val bitmapCache = object : LruCache<Int, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 32).coerceAtMost(25L * 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int {
             return value.byteCount / 1024
+        }
+        override fun entryRemoved(evicted: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
+            if (evicted) oldValue.recycle()
         }
     }
 

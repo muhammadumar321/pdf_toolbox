@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -12,19 +13,21 @@ import android.os.ParcelFileDescriptor
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.pdftoolbox.app.R
 import com.pdftoolbox.app.databinding.FragmentEditPdfBinding
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.graphics.Color
-import android.widget.EditText
-import android.widget.FrameLayout
 
 class EditPdfFragment : Fragment() {
 
@@ -34,6 +37,10 @@ class EditPdfFragment : Fragment() {
 
     private var pdfRenderer: PdfRenderer? = null
     private var parcelFileDescriptor: ParcelFileDescriptor? = null
+    private var pageCount = 0
+    private var currentPage = 0
+    private var renderJob: Job? = null
+    private var currentRenderedBitmap: Bitmap? = null
 
     private var isDrawMode = true
     private var currentColor = Color.BLACK
@@ -42,7 +49,7 @@ class EditPdfFragment : Fragment() {
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
                 viewModel.selectFile(uri)
-                renderFirstPage(uri)
+                openPdf(uri)
             }
         }
     }
@@ -51,7 +58,8 @@ class EditPdfFragment : Fragment() {
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
                 binding.progressBar.visibility = View.VISIBLE
-                val overlayBitmap = getDrawingBitmap()
+                val overlayBitmap = captureDrawingOverlay()
+                viewModel.setCurrentPage(currentPage)
                 viewModel.applyEdits(overlayBitmap, uri)
             }
         }
@@ -65,15 +73,15 @@ class EditPdfFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.toolbarEdit.setNavigationIcon(com.pdftoolbox.app.R.drawable.ic_home)
+        binding.toolbarEdit.setNavigationIcon(R.drawable.ic_home)
         binding.toolbarEdit.setNavigationOnClickListener {
             findNavController().navigateUp()
         }
 
-        binding.toolbarEdit.inflateMenu(com.pdftoolbox.app.R.menu.menu_edit_pdf)
+        binding.toolbarEdit.inflateMenu(R.menu.menu_edit_pdf)
         binding.toolbarEdit.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                com.pdftoolbox.app.R.id.action_open -> {
+                R.id.action_open -> {
                     openFilePicker()
                     true
                 }
@@ -91,6 +99,9 @@ class EditPdfFragment : Fragment() {
             }
         }
 
+        binding.btnPrevPage.setOnClickListener { navigatePage(-1) }
+        binding.btnNextPage.setOnClickListener { navigatePage(1) }
+
         viewModel.editState.observe(viewLifecycleOwner) { result ->
             binding.progressBar.visibility = View.GONE
             result.onSuccess {
@@ -99,11 +110,106 @@ class EditPdfFragment : Fragment() {
                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
-        
-        // Start by picking a file if arguments are empty (arguments aren't strictly passed in MVP from Tools yet)
+
         if (viewModel.selectedFile.value == null) {
             openFilePicker()
         }
+    }
+
+    private fun openPdf(uri: Uri) {
+        currentPage = 0
+        renderCurrentPage(uri)
+    }
+
+    private fun navigatePage(delta: Int) {
+        val newPage = currentPage + delta
+        if (newPage in 0 until pageCount) {
+            currentPage = newPage
+            viewModel.selectedFile.value?.let { renderCurrentPage(it) }
+        }
+    }
+
+    private fun renderCurrentPage(uri: Uri) {
+        renderJob?.cancel()
+        binding.progressBar.visibility = View.VISIBLE
+
+        val lp = binding.canvasContainer.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+        lp.width = 0
+        lp.height = 0
+        binding.canvasContainer.layoutParams = lp
+
+        binding.canvasContainer.post {
+            val maxW = binding.canvasContainer.width.coerceAtLeast(1)
+            val maxH = binding.canvasContainer.height.coerceAtLeast(1)
+
+            renderJob = lifecycleScope.launch {
+                val bitmap = withContext(Dispatchers.IO) { renderPageBitmap(uri, maxW, maxH, currentPage) }
+                currentRenderedBitmap?.recycle()
+                currentRenderedBitmap = bitmap
+                if (bitmap != null) {
+                    binding.pdfPageImage.setImageBitmap(bitmap)
+                }
+                binding.drawingView.clear()
+                removeTextOverlays()
+                binding.progressBar.visibility = View.GONE
+                updatePageIndicator()
+            }
+        }
+    }
+
+    private fun renderPageBitmap(uri: Uri, maxW: Int, maxH: Int, pageIndex: Int): Bitmap? {
+        closeRenderer()
+        return try {
+            val pfd = requireContext().contentResolver.openFileDescriptor(uri, "r") ?: return null
+            parcelFileDescriptor = pfd
+            pdfRenderer = PdfRenderer(pfd)
+            val renderer = pdfRenderer ?: return null
+            if (pageIndex < 0 || pageIndex >= renderer.pageCount) return null
+            pageCount = renderer.pageCount
+
+            val page = renderer.openPage(pageIndex)
+            val pdfWidth = page.width.toFloat()
+            val pdfHeight = page.height.toFloat()
+            if (pdfWidth <= 0f || pdfHeight <= 0f) { page.close(); return null }
+
+            val scaleX = maxW / pdfWidth
+            val scaleY = maxH / pdfHeight
+            val scale = minOf(scaleX, scaleY, 1.5f)
+
+            val layoutWidth = (pdfWidth * scale).toInt().coerceAtLeast(1)
+            val layoutHeight = (pdfHeight * scale).toInt().coerceAtLeast(1)
+
+            lifecycleScope.launch {
+                val clp = binding.canvasContainer.layoutParams
+                clp.width = layoutWidth
+                clp.height = layoutHeight
+                binding.canvasContainer.layoutParams = clp
+            }
+
+            val maxRenderDim = 2048
+            val renderScale = minOf(scale * 2f, maxRenderDim / pdfWidth, maxRenderDim / pdfHeight)
+            val bmpWidth = (pdfWidth * renderScale).toInt().coerceIn(1, maxRenderDim)
+            val bmpHeight = (pdfHeight * renderScale).toInt().coerceIn(1, maxRenderDim)
+
+            val bitmap = Bitmap.createBitmap(bmpWidth, bmpHeight, Bitmap.Config.ARGB_8888)
+            val matrix = Matrix().apply { postScale(renderScale, renderScale) }
+            page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            page.close()
+            bitmap
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun captureDrawingOverlay(): Bitmap {
+        val view = binding.canvasContainer
+        binding.pdfPageImage.visibility = View.INVISIBLE
+        val bitmap = Bitmap.createBitmap(view.width.coerceAtLeast(1), view.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        view.draw(canvas)
+        binding.pdfPageImage.visibility = View.VISIBLE
+        return bitmap
     }
 
     private fun openFilePicker() {
@@ -123,103 +229,9 @@ class EditPdfFragment : Fragment() {
         createFileLauncher.launch(intent)
     }
 
-    private fun renderFirstPage(uri: Uri) {
-        binding.progressBar.visibility = View.VISIBLE
-        
-        // Reset layout margins/constraints to get max available space
-        val lp = binding.canvasContainer.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-        lp.width = 0
-        lp.height = 0
-        binding.canvasContainer.layoutParams = lp
-        
-        binding.canvasContainer.post {
-            val maxW = binding.canvasContainer.width
-            val maxH = binding.canvasContainer.height
-
-            CoroutineScope(Dispatchers.Main).launch {
-                val bitmap = withContext(Dispatchers.IO) { getPageBitmap(uri, maxW, maxH) }
-                binding.pdfPageImage.setImageBitmap(bitmap)
-                binding.drawingView.clear()
-                
-                // Clear any added textviews
-                val childCount = binding.canvasContainer.childCount
-                for (i in childCount - 1 downTo 0) {
-                    val child = binding.canvasContainer.getChildAt(i)
-                    if (child is EditText) {
-                        binding.canvasContainer.removeView(child)
-                    }
-                }
-                binding.progressBar.visibility = View.GONE
-            }
-        }
-    }
-
-    private fun getPageBitmap(uri: Uri, maxW: Int, maxH: Int): Bitmap? {
-        closeRenderer()
-        try {
-            val pfd = requireContext().contentResolver.openFileDescriptor(uri, "r") ?: return null
-            parcelFileDescriptor = pfd
-            pdfRenderer = PdfRenderer(pfd)
-            
-            val renderer = pdfRenderer ?: return null
-            if (renderer.pageCount == 0) return null
-            
-            val page = renderer.openPage(0)
-            
-            val pdfWidth = page.width.toFloat()
-            val pdfHeight = page.height.toFloat()
-            if (pdfWidth == 0f || pdfHeight == 0f) return null
-
-            val scaleX = maxW / pdfWidth
-            val scaleY = maxH / pdfHeight
-            val scale = minOf(scaleX, scaleY)
-
-            val layoutWidth = (pdfWidth * scale).toInt()
-            val layoutHeight = (pdfHeight * scale).toInt()
-            
-            // Adjust container dimensions to tightly fit the PDF page
-            CoroutineScope(Dispatchers.Main).launch {
-                val clp = binding.canvasContainer.layoutParams
-                clp.width = layoutWidth
-                clp.height = layoutHeight
-                binding.canvasContainer.layoutParams = clp
-            }
-
-            // High-res render scale for crispness
-            val renderScale = scale * 2f
-            val bmpWidth = (pdfWidth * renderScale).toInt()
-            val bmpHeight = (pdfHeight * renderScale).toInt()
-            
-            val bitmap = Bitmap.createBitmap(bmpWidth, bmpHeight, Bitmap.Config.ARGB_8888)
-            val matrix = Matrix().apply { postScale(renderScale, renderScale) }
-            
-            page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            page.close()
-            return bitmap
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return null
-        }
-    }
-    
-    // Captures the drawingView as a Bitmap to overlay onto the pdf
-    private fun getDrawingBitmap(): Bitmap {
-        val view = binding.canvasContainer
-        
-        // Hide pdf_page_image temporarily to only capture the drawings and text
-        binding.pdfPageImage.visibility = View.INVISIBLE
-        
-        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        view.draw(canvas)
-        
-        binding.pdfPageImage.visibility = View.VISIBLE
-        return bitmap
-    }
-
     private fun setupToolbar() {
         binding.btnUndo.setOnClickListener { binding.drawingView.undo() }
-        
+
         binding.btnModeDraw.setOnClickListener {
             isDrawMode = true
             binding.drawingView.isDrawingMode = true
@@ -230,11 +242,11 @@ class EditPdfFragment : Fragment() {
             binding.drawingView.isDrawingMode = false
             updateModeUI()
         }
-        
+
         binding.colorBlack.setOnClickListener { setColor(Color.BLACK, binding.colorBlack) }
-        binding.colorRed.setOnClickListener { setColor(Color.parseColor("#BA1A1A"), binding.colorRed) } 
-        binding.colorBlue.setOnClickListener { setColor(Color.parseColor("#5A31E1"), binding.colorBlue) } 
-        
+        binding.colorRed.setOnClickListener { setColor(Color.parseColor("#BA1A1A"), binding.colorRed) }
+        binding.colorBlue.setOnClickListener { setColor(Color.parseColor("#5A31E1"), binding.colorBlue) }
+
         binding.canvasContainer.setOnTouchListener { _, event ->
             if (!isDrawMode && event.action == android.view.MotionEvent.ACTION_UP) {
                 addTextAt(event.x, event.y)
@@ -247,8 +259,8 @@ class EditPdfFragment : Fragment() {
     }
 
     private fun updateModeUI() {
-        val activeColor = requireContext().getColor(com.pdftoolbox.app.R.color.md_theme_light_primary)
-        val inactiveColor = requireContext().getColor(com.pdftoolbox.app.R.color.md_theme_light_onSurfaceVariant)
+        val activeColor = requireContext().getColor(R.color.md_theme_light_primary)
+        val inactiveColor = requireContext().getColor(R.color.md_theme_light_onSurfaceVariant)
         binding.btnModeDraw.setColorFilter(if (isDrawMode) activeColor else inactiveColor)
         binding.btnModeText.setColorFilter(if (!isDrawMode) activeColor else inactiveColor)
         binding.btnUndo.isEnabled = isDrawMode
@@ -257,7 +269,6 @@ class EditPdfFragment : Fragment() {
     private fun setColor(color: Int, selectedView: View) {
         currentColor = color
         binding.drawingView.setStrokeColor(color)
-        
         binding.colorBlack.strokeWidth = 0
         binding.colorRed.strokeWidth = 0
         binding.colorBlue.strokeWidth = 0
@@ -280,23 +291,49 @@ class EditPdfFragment : Fragment() {
             setHintTextColor(Color.GRAY)
             requestFocus()
         }
-            
         binding.canvasContainer.addView(editText)
-        
-        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-        imm.showSoftInput(editText, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        val imm = requireContext().getSystemService(InputMethodManager::class.java)
+        imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun removeTextOverlays() {
+        for (i in binding.canvasContainer.childCount - 1 downTo 0) {
+            val child = binding.canvasContainer.getChildAt(i)
+            if (child is EditText) {
+                binding.canvasContainer.removeView(child)
+            }
+        }
+    }
+
+    private fun updatePageIndicator() {
+        if (pageCount > 0) {
+            binding.tvPageIndicator.text = "Page ${currentPage + 1} of $pageCount"
+            binding.tvPageIndicator.visibility = View.VISIBLE
+            binding.btnPrevPage.visibility = View.VISIBLE
+            binding.btnNextPage.visibility = View.VISIBLE
+            binding.btnPrevPage.isEnabled = currentPage > 0
+            binding.btnNextPage.isEnabled = currentPage < pageCount - 1
+        } else {
+            binding.tvPageIndicator.visibility = View.GONE
+            binding.btnPrevPage.visibility = View.GONE
+            binding.btnNextPage.visibility = View.GONE
+        }
     }
 
     private fun closeRenderer() {
         pdfRenderer?.close()
-        parcelFileDescriptor?.close()
+        try { parcelFileDescriptor?.close() } catch (_: Exception) {}
         pdfRenderer = null
         parcelFileDescriptor = null
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
+        renderJob?.cancel()
+        renderJob = null
         closeRenderer()
+        currentRenderedBitmap?.recycle()
+        currentRenderedBitmap = null
         _binding = null
+        super.onDestroyView()
     }
 }
