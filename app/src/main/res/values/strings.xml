@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Foliodex</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+    
+    <!-- Actions -->
+    <string name="action_merge">Merge</string>
+    <string name="action_split">Split</string>
+    <string name="action_compress">Compress</string>
+    <string name="action_convert">Convert</string>
+    <string name="action_ocr">OCR</string>
+    <string name="action_watermark">Watermark</string>
+    <string name="action_settings">Settings</string>
+    
+    <!-- Errors -->
+    <string name="error_file_open">Could not open file</string>
+    <string name="error_permission_denied">Permission denied</string>
+    <string name="password_label">Enter Password</string>
+    <string name="action_protect">Protect</string>
+    <string name="action_unlock">Unlock</string>
+    <string name="action_rearrange">Rearrange</string>
+    <string name="action_page_numbers">Page Numbers</string>
+</resources>

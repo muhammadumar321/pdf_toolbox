@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/navigation_home">
+
+    <fragment
+        android:id="@+id/navigation_home"
+        android:name="com.pdftoolbox.app.ui.home.HomeFragment"
+        android:label="@string/title_home"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_home_to_viewer"
+            app:destination="@id/navigation_viewer" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_tools"
+        android:name="com.pdftoolbox.app.ui.tools.ToolsFragment"
+        android:label="@string/title_dashboard"
+        tools:layout="@layout/fragment_tools">
+         <action
+            android:id="@+id/action_tools_to_viewer"
+            app:destination="@id/navigation_viewer" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_settings"
+        android:name="com.pdftoolbox.app.ui.settings.SettingsFragment"
+        android:label="@string/action_settings"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/navigation_viewer"
+        android:name="com.pdftoolbox.app.ui.viewer.ViewerFragment"
+        android:label="Viewer"
+        tools:layout="@layout/fragment_viewer">
+        <argument
+            android:name="fileUri"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_merge"
+        android:name="com.pdftoolbox.app.ui.tools.merge.MergeFragment"
+        android:label="Merge PDF"
+        tools:layout="@layout/fragment_merge" />
+
+    <fragment
+        android:id="@+id/navigation_split"
+        android:name="com.pdftoolbox.app.ui.tools.split.SplitFragment"
+        android:label="Split PDF"
+        tools:layout="@layout/fragment_split" />
+
+    <fragment
+        android:id="@+id/navigation_compress"
+        android:name="com.pdftoolbox.app.ui.tools.compress.CompressFragment"
+        android:label="Compress PDF"
+        tools:layout="@layout/fragment_compress" />
+
+    <fragment
+        android:id="@+id/navigation_rotate"
+        android:name="com.pdftoolbox.app.ui.tools.rotate.RotateFragment"
+        android:label="Rotate PDF"
+        tools:layout="@layout/fragment_rotate" />
+
+    <fragment
+        android:id="@+id/navigation_convert"
+        android:name="com.pdftoolbox.app.ui.tools.convert.ConvertFragment"
+        android:label="Images to PDF"
+        tools:layout="@layout/fragment_convert" />
+
+    <fragment
+        android:id="@+id/navigation_watermark"
+        android:name="com.pdftoolbox.app.ui.tools.watermark.WatermarkFragment"
+        android:label="Watermark PDF"
+        tools:layout="@layout/fragment_watermark" />
+
+    <fragment
+        android:id="@+id/navigation_delete_pages"
+        android:name="com.pdftoolbox.app.ui.tools.delete.DeletePagesFragment"
+        android:label="Delete Pages"
+        tools:layout="@layout/fragment_delete_pages" />
+
+    <fragment
+        android:id="@+id/navigation_extract_text"
+        android:name="com.pdftoolbox.app.ui.tools.extract.ExtractTextFragment"
+        android:label="Extract Text"
+        tools:layout="@layout/fragment_extract_text" />
+
+    <fragment
+        android:id="@+id/navigation_extract_images"
+        android:name="com.pdftoolbox.app.ui.tools.extract.ExtractImagesFragment"
+        android:label="Extract Images"
+        tools:layout="@layout/fragment_extract_images" />
+
+    <fragment
+        android:id="@+id/navigation_edit_pdf"
+        android:name="com.pdftoolbox.app.ui.tools.edit.EditPdfFragment"
+        android:label="Edit PDF"
+        tools:layout="@layout/fragment_edit_pdf" />
+
+    <fragment
+        android:id="@+id/navigation_protect"
+        android:name="com.pdftoolbox.app.ui.tools.protect.ProtectFragment"
+        android:label="Protect PDF" />
+
+    <fragment
+        android:id="@+id/navigation_unlock"
+        android:name="com.pdftoolbox.app.ui.tools.unlock.UnlockFragment"
+        android:label="Unlock PDF" />
+
+    <fragment
+        android:id="@+id/navigation_page_numbers"
+        android:name="com.pdftoolbox.app.ui.tools.pagenumbers.PageNumbersFragment"
+        android:label="Page Numbers" />
+
+    <fragment
+        android:id="@+id/navigation_rearrange"
+        android:name="com.pdftoolbox.app.ui.tools.rearrange.RearrangeFragment"
+        android:label="Rearrange Pages" />
+</navigation>
