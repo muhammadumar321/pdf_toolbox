@@ -65,7 +65,7 @@ class SplitFragment : Fragment() {
 
         viewModel.selectedFile.observe(viewLifecycleOwner) { uri ->
             if (uri != null) {
-                binding.textSelectedFile.text = uri.lastPathSegment ?: "Selected File"
+                binding.textSelectedFile.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(requireContext(), uri)
                 binding.btnSplit.isEnabled = true
             } else {
                 binding.textSelectedFile.text = "No file selected"

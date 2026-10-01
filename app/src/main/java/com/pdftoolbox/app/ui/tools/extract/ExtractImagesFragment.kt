@@ -106,33 +106,7 @@ class ExtractImagesFragment : Fragment() {
     }
 
     private fun updateSelectedFileUI(uri: Uri) {
-        val fileName = getFileName(uri)
-        binding.tvSelectedFile.text = fileName ?: uri.lastPathSegment
-    }
-
-    private fun getFileName(uri: Uri): String? {
-        var result: String? = null
-        if (uri.scheme == "content") {
-            val cursor = requireContext().contentResolver.query(uri, null, null, null, null)
-            try {
-                if (cursor != null && cursor.moveToFirst()) {
-                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex != -1) {
-                        result = cursor.getString(nameIndex)
-                    }
-                }
-            } finally {
-                cursor?.close()
-            }
-        }
-        if (result == null) {
-            result = uri.path
-            val cut = result?.lastIndexOf('/')
-            if (cut != null && cut != -1) {
-                result = result?.substring(cut + 1)
-            }
-        }
-        return result
+        binding.tvSelectedFile.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(requireContext(), uri)
     }
 
     override fun onDestroyView() {

@@ -24,6 +24,10 @@ class HomeFragment : Fragment() {
     private val openPdfLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
+                try {
+                    val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
+                } catch (_: Exception) {}
                 viewModel.addRecentFile(uri)
                 openPdfViewer(uri)
             }

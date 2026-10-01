@@ -23,42 +23,92 @@
         android:layout_height="wrap_content"
         android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/toolbar_edit"
-        app:layout_constraintBottom_toTopOf="@id/bottom_toolbar"
+        app:layout_constraintBottom_toTopOf="@id/page_nav_bar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <FrameLayout
-        android:id="@+id/canvas_container"
+        android:id="@+id/canvas_viewport"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_margin="16dp"
-        android:background="@android:color/white"
-        android:elevation="4dp"
         app:layout_constraintTop_toBottomOf="@id/toolbar_edit"
-        app:layout_constraintBottom_toTopOf="@id/bottom_toolbar"
+        app:layout_constraintBottom_toTopOf="@id/page_nav_bar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageView
-            android:id="@+id/pdf_page_image"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitCenter" />
+        <FrameLayout
+            android:id="@+id/canvas_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@android:color/white"
+            android:elevation="4dp">
 
-        <com.pdftoolbox.app.ui.widgets.PdfDrawingView
-            android:id="@+id/drawing_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            <ImageView
+                android:id="@+id/pdf_page_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter" />
+
+            <com.pdftoolbox.app.ui.widgets.PdfDrawingView
+                android:id="@+id/drawing_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
     </FrameLayout>
 
     <LinearLayout
+        android:id="@+id/page_nav_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="4dp"
+        android:background="?attr/colorSurface"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottom_toolbar">
+
+        <ImageButton
+            android:id="@+id/btn_prev_page"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_previous"
+            android:visibility="gone"
+            app:tint="?attr/colorPrimary" />
+
+        <TextView
+            android:id="@+id/tv_page_indicator"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/btn_next_page"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_next"
+            android:visibility="gone"
+            app:tint="?attr/colorPrimary" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/bottom_toolbar"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="8dp"
         android:gravity="center_vertical"
         android:background="?attr/colorSurfaceVariant"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <ImageButton
@@ -121,45 +171,6 @@
             app:cardCornerRadius="12dp"
             app:strokeWidth="0dp"
             app:strokeColor="?attr/colorOutline" />
-
-        <LinearLayout
-            android:id="@+id/page_nav_bar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="4dp"
-            android:background="?attr/colorSurface"
-            app:layout_constraintBottom_toTopOf="@id/bottom_toolbar">
-
-            <ImageButton
-                android:id="@+id/btn_prev_page"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_previous"
-                android:visibility="gone"
-                app:tint="?attr/colorPrimary" />
-
-            <TextView
-                android:id="@+id/tv_page_indicator"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:visibility="gone" />
-
-            <ImageButton
-                android:id="@+id/btn_next_page"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_next"
-                android:visibility="gone"
-                app:tint="?attr/colorPrimary" />
-        </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_save_edits"

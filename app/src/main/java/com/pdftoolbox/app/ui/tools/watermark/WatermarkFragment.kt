@@ -86,12 +86,12 @@ class WatermarkFragment : Fragment() {
         }
 
         viewModel.selectedFile.observe(viewLifecycleOwner) { uri ->
-            binding.tvSelectedFile.text = uri?.lastPathSegment ?: "No file selected"
+            binding.tvSelectedFile.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(requireContext(), uri)
             updateApplyButtonState()
         }
 
         viewModel.selectedImage.observe(viewLifecycleOwner) { uri ->
-            binding.tvSelectedImage.text = uri?.lastPathSegment ?: "No image selected"
+            binding.tvSelectedImage.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(requireContext(), uri)
             updateApplyButtonState()
         }
 

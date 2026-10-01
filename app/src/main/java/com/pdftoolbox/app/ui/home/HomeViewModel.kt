@@ -30,34 +30,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addRecentFile(uri: Uri) {
         viewModelScope.launch {
-            val name = getFileName(uri) ?: "Unknown.pdf"
+            val name = com.pdftoolbox.app.utils.FileUtils.getDisplayName(getApplication(), uri)
             repository.addRecentFile(uri.toString(), name)
             loadRecentFiles()
         }
-    }
-
-    private fun getFileName(uri: Uri): String? {
-        var result: String? = null
-        if (uri.scheme == "content") {
-            val cursor = getApplication<Application>().contentResolver.query(uri, null, null, null, null)
-            try {
-                if (cursor != null && cursor.moveToFirst()) {
-                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex != -1) {
-                        result = cursor.getString(nameIndex)
-                    }
-                }
-            } finally {
-                cursor?.close()
-            }
-        }
-        if (result == null) {
-            result = uri.path
-            val cut = result?.lastIndexOf('/')
-            if (cut != null && cut != -1) {
-                result = result?.substring(cut + 1)
-            }
-        }
-        return result
     }
 }

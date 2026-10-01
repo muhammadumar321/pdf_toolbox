@@ -52,7 +52,7 @@ class CompressFragment : Fragment() {
         }
 
         viewModel.selectedFile.observe(viewLifecycleOwner) { uri ->
-            binding.tvSelectedFile.text = uri?.lastPathSegment ?: "No file selected"
+            binding.tvSelectedFile.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(requireContext(), uri)
             binding.btnCompress.isEnabled = uri != null
         }
 

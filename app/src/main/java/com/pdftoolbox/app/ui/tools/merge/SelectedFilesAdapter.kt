@@ -49,7 +49,7 @@ class SelectedFilesAdapter(
 
     inner class FileViewHolder(private val binding: ItemFileSelectedBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(uri: Uri) {
-            binding.textFileName.text = uri.lastPathSegment ?: "Unknown File"
+            binding.textFileName.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(binding.root.context, uri)
             binding.btnOpen.visibility = android.view.View.GONE
             binding.btnRemove.visibility = android.view.View.VISIBLE
             binding.btnRemove.setOnClickListener { onRemoveClick(uri) }

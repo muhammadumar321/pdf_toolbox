@@ -45,11 +45,28 @@ class MainActivity : AppCompatActivity() {
             R.id.navigation_watermark,
             R.id.navigation_delete_pages,
             R.id.navigation_extract_text,
-            R.id.navigation_extract_images
+            R.id.navigation_extract_images,
+            R.id.navigation_edit_pdf,
+            R.id.navigation_protect,
+            R.id.navigation_unlock,
+            R.id.navigation_page_numbers,
+            R.id.navigation_rearrange
+        )
+        val fullScreenDestinations = setOf(
+            R.id.navigation_viewer,
+            R.id.navigation_edit_pdf
         )
         navController.addOnDestinationChangedListener { _, destination, _ ->
+            binding.bottomNavigation.visibility = if (destination.id in fullScreenDestinations) {
+                android.view.View.GONE
+            } else {
+                android.view.View.VISIBLE
+            }
+
             if (destination.id in toolDestinations) {
-                binding.bottomNavigation.selectedItemId = R.id.navigation_tools
+                if (binding.bottomNavigation.selectedItemId != R.id.navigation_tools) {
+                    binding.bottomNavigation.selectedItemId = R.id.navigation_tools
+                }
             }
         }
 

@@ -117,7 +117,7 @@ class PdfToolsRepository(private val context: Context) {
                     
                     contentStream.beginText()
                     contentStream.setFont(font, fontSize)
-                    contentStream.setNonStrokingColor(200, 200, 200) // Light gray
+                    contentStream.setNonStrokingColor(200f / 255f, 200f / 255f, 200f / 255f) // Light gray
                     
                     // Center the text
                     val mediaBox = page.mediaBox
@@ -387,7 +387,7 @@ class PdfToolsRepository(private val context: Context) {
                     
                     contentStream.beginText()
                     contentStream.setFont(font, fontSize)
-                    contentStream.setNonStrokingColor(100, 100, 100)
+                    contentStream.setNonStrokingColor(100f / 255f, 100f / 255f, 100f / 255f)
                     
                     val x = (page.mediaBox.width - stringWidth) / 2
                     val y = 20f // 20 units from bottom
@@ -525,30 +525,6 @@ class PdfToolsRepository(private val context: Context) {
     }
 
     private fun parsePageRange(range: String, totalPages: Int): List<Int> {
-        val result = mutableListOf<Int>()
-        try {
-            val parts = range.split(",")
-            for (part in parts) {
-                if (part.contains("-")) {
-                    val bounds = part.trim().split("-")
-                    if (bounds.size == 2) {
-                        val start = bounds[0].trim().toIntOrNull()
-                        val end = bounds[1].trim().toIntOrNull()
-                        if (start != null && end != null) {
-                            for (i in start..end) {
-                                result.add(i - 1)
-                            }
-                        }
-                    }
-                } else {
-                    val page = part.trim().toIntOrNull()
-                    if (page != null) {
-                        result.add(page - 1)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-        }
-        return result.sorted().distinct()
+        return com.pdftoolbox.app.utils.FileUtils.parsePageRange(range, totalPages)
     }
 }

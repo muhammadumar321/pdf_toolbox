@@ -82,7 +82,7 @@ class ProtectFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.selectedFile.collect { uri ->
-                binding.tvSelectedFile.text = uri?.lastPathSegment ?: "No file selected"
+                binding.tvSelectedFile.text = com.pdftoolbox.app.utils.FileUtils.getDisplayName(requireContext(), uri)
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {

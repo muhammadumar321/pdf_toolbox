@@ -133,14 +133,9 @@ class EditPdfFragment : Fragment() {
         renderJob?.cancel()
         binding.progressBar.visibility = View.VISIBLE
 
-        val lp = binding.canvasContainer.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-        lp.width = 0
-        lp.height = 0
-        binding.canvasContainer.layoutParams = lp
-
-        binding.canvasContainer.post {
-            val maxW = binding.canvasContainer.width.coerceAtLeast(1)
-            val maxH = binding.canvasContainer.height.coerceAtLeast(1)
+        binding.canvasViewport.post {
+            val maxW = binding.canvasViewport.width.coerceAtLeast(100)
+            val maxH = binding.canvasViewport.height.coerceAtLeast(100)
 
             renderJob = lifecycleScope.launch {
                 val bitmap = withContext(Dispatchers.IO) { renderPageBitmap(uri, maxW, maxH, currentPage) }
@@ -157,7 +152,7 @@ class EditPdfFragment : Fragment() {
         }
     }
 
-    private fun renderPageBitmap(uri: Uri, maxW: Int, maxH: Int, pageIndex: Int): Bitmap? {
+    private suspend fun renderPageBitmap(uri: Uri, maxW: Int, maxH: Int, pageIndex: Int): Bitmap? {
         closeRenderer()
         return try {
             val pfd = requireContext().contentResolver.openFileDescriptor(uri, "r") ?: return null
@@ -172,27 +167,22 @@ class EditPdfFragment : Fragment() {
             val pdfHeight = page.height.toFloat()
             if (pdfWidth <= 0f || pdfHeight <= 0f) { page.close(); return null }
 
-            val scaleX = maxW / pdfWidth
-            val scaleY = maxH / pdfHeight
-            val scale = minOf(scaleX, scaleY, 1.5f)
+            val scaleX = maxW.toFloat() / pdfWidth
+            val scaleY = maxH.toFloat() / pdfHeight
+            val scale = minOf(scaleX, scaleY)
 
             val layoutWidth = (pdfWidth * scale).toInt().coerceAtLeast(1)
             val layoutHeight = (pdfHeight * scale).toInt().coerceAtLeast(1)
 
-            lifecycleScope.launch {
+            withContext(Dispatchers.Main) {
                 val clp = binding.canvasContainer.layoutParams
                 clp.width = layoutWidth
                 clp.height = layoutHeight
                 binding.canvasContainer.layoutParams = clp
             }
 
-            val maxRenderDim = 2048
-            val renderScale = minOf(scale * 2f, maxRenderDim / pdfWidth, maxRenderDim / pdfHeight)
-            val bmpWidth = (pdfWidth * renderScale).toInt().coerceIn(1, maxRenderDim)
-            val bmpHeight = (pdfHeight * renderScale).toInt().coerceIn(1, maxRenderDim)
-
-            val bitmap = Bitmap.createBitmap(bmpWidth, bmpHeight, Bitmap.Config.ARGB_8888)
-            val matrix = Matrix().apply { postScale(renderScale, renderScale) }
+            val bitmap = Bitmap.createBitmap(layoutWidth, layoutHeight, Bitmap.Config.ARGB_8888)
+            val matrix = Matrix().apply { postScale(scale, scale) }
             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             page.close()
             bitmap

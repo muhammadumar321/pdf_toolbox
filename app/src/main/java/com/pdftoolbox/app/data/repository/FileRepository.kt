@@ -31,8 +31,7 @@ class FileRepository(private val context: Context) {
         return@withContext null
     }
 
-    private fun getFileName(uri: Uri): String? {
-        // Simplified for now, real implementation should query MediaStore/ContentResolver
-        return uri.lastPathSegment
+    private fun getFileName(uri: Uri): String {
+        return com.pdftoolbox.app.utils.FileUtils.getDisplayName(context, uri)
     }
 }

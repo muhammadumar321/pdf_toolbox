@@ -44,6 +44,7 @@ class MergeFragment : Fragment() {
     private val createDocumentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
+                binding.progressMerge.visibility = View.VISIBLE
                 viewModel.mergeFiles(uri)
             }
         }
@@ -107,6 +108,7 @@ class MergeFragment : Fragment() {
         }
 
         viewModel.mergeState.observe(viewLifecycleOwner) { result ->
+            binding.progressMerge.visibility = View.GONE
             result.fold(
                 onSuccess = {
                     Toast.makeText(context, "Merge Successful!", Toast.LENGTH_SHORT).show()

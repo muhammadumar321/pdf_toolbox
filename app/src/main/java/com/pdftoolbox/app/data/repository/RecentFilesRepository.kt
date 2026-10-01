@@ -20,6 +20,9 @@ class RecentFilesRepository(private val context: Context) {
         currentList.removeAll { it.uri == uri }
         // Add to top
         currentList.add(0, RecentFile(uri, name, System.currentTimeMillis()))
+        if (currentList.size > MAX_RECENT_FILES) {
+            currentList.subList(MAX_RECENT_FILES, currentList.size).clear()
+        }
         saveRecentFiles(currentList)
     }
 
@@ -75,5 +78,9 @@ class RecentFilesRepository(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    companion object {
+        const val MAX_RECENT_FILES = 30
     }
 }

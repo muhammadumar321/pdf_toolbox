@@ -27,6 +27,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import android.widget.Toast
+import com.pdftoolbox.app.utils.FileUtils
+
 class ViewerFragment : Fragment() {
 
     private var _binding: FragmentViewerBinding? = null
@@ -36,6 +41,7 @@ class ViewerFragment : Fragment() {
     private var pdfRenderer: PdfRenderer? = null
     private var parcelFileDescriptor: ParcelFileDescriptor? = null
     private var pageCount: Int = 0
+    private val renderMutex = Mutex()
     private lateinit var adapter: PdfPageAdapter
     private val bitmapCache = object : LruCache<Int, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 32).coerceAtMost(25L * 1024).toInt()) {
         override fun sizeOf(key: Int, value: Bitmap): Int {
@@ -72,13 +78,18 @@ class ViewerFragment : Fragment() {
         
         binding.toolbarViewer.setOnMenuItemClickListener { false }
 
+        val uriStr = fileUriString
+        if (uriStr != null) {
+            val uri = Uri.parse(uriStr)
+            binding.toolbarViewer.title = FileUtils.getDisplayName(requireContext(), uri)
+        }
+
         adapter = PdfPageAdapter(viewLifecycleOwner.lifecycleScope, bitmapCache) { index, targetWidth ->
             renderPage(index, targetWidth)
         }
         binding.recyclerPages.layoutManager = LinearLayoutManager(context)
         binding.recyclerPages.adapter = adapter
 
-        val uriStr = fileUriString
         if (uriStr != null) {
             openPdfInApp(Uri.parse(uriStr))
         }
@@ -88,50 +99,75 @@ class ViewerFragment : Fragment() {
         binding.progressBar.visibility = View.VISIBLE
         bitmapCache.evictAll()
         viewLifecycleOwner.lifecycleScope.launch {
-            val count = withContext(Dispatchers.IO) { openRenderer(uri) }
+            val count = openRenderer(uri)
             pageCount = count
-            val pages = (0 until pageCount).toList()
-            adapter.submitList(pages)
             binding.progressBar.visibility = View.GONE
+            if (count > 0) {
+                val pages = (0 until pageCount).toList()
+                adapter.submitList(pages)
+            } else {
+                adapter.submitList(emptyList())
+                Toast.makeText(
+                    context,
+                    "Unable to open PDF (file may be password-protected, corrupted, or inaccessible)",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
-    private fun openRenderer(uri: Uri): Int {
-        closeRenderer()
-        val pfd = requireContext().contentResolver.openFileDescriptor(uri, "r") ?: return 0
-        parcelFileDescriptor = pfd
-        pdfRenderer = PdfRenderer(pfd)
-        return pdfRenderer?.pageCount ?: 0
-    }
-
-    private fun renderPage(pageIndex: Int, targetWidth: Int): Bitmap? {
-        val renderer = pdfRenderer ?: return null
-        if (pageIndex < 0 || pageIndex >= renderer.pageCount) return null
-        val page = renderer.openPage(pageIndex)
-        val width = if (targetWidth > 0) targetWidth else page.width
-        val scale = width.toFloat() / page.width.toFloat()
-        val height = (page.height * scale).toInt()
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val matrix = Matrix().apply {
-            postScale(scale, scale)
+    private suspend fun openRenderer(uri: Uri): Int = withContext(Dispatchers.IO) {
+        renderMutex.withLock {
+            closeRendererInternal()
+            return@withContext try {
+                val pfd = requireContext().contentResolver.openFileDescriptor(uri, "r") ?: return@withContext 0
+                parcelFileDescriptor = pfd
+                pdfRenderer = PdfRenderer(pfd)
+                pdfRenderer?.pageCount ?: 0
+            } catch (_: SecurityException) {
+                0
+            } catch (_: Exception) {
+                0
+            }
         }
-        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        page.close()
-        return bitmap
     }
 
-    private fun closeRenderer() {
-        pdfRenderer?.close()
-        parcelFileDescriptor?.close()
+    private suspend fun renderPage(pageIndex: Int, targetWidth: Int): Bitmap? = withContext(Dispatchers.IO) {
+        renderMutex.withLock {
+            val renderer = pdfRenderer ?: return@withContext null
+            if (pageIndex < 0 || pageIndex >= renderer.pageCount) return@withContext null
+            return@withContext try {
+                val page = renderer.openPage(pageIndex)
+                val width = if (targetWidth > 0) targetWidth else page.width
+                val scale = width.toFloat() / page.width.toFloat()
+                val height = (page.height * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(width.coerceAtLeast(1), height, Bitmap.Config.ARGB_8888)
+                val matrix = Matrix().apply {
+                    postScale(scale, scale)
+                }
+                page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                page.close()
+                bitmap
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    private fun closeRendererInternal() {
+        try {
+            pdfRenderer?.close()
+        } catch (_: Exception) {}
+        try {
+            parcelFileDescriptor?.close()
+        } catch (_: Exception) {}
         pdfRenderer = null
         parcelFileDescriptor = null
     }
 
-    // Removed viewer-specific helpers in external viewer fallback
-
     override fun onDestroyView() {
         super.onDestroyView()
-        closeRenderer()
+        closeRendererInternal()
         _binding = null
     }
 
